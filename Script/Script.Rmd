@@ -41,5 +41,44 @@ full_draft_data_w_NAs <- left_join(draft_data_clean,
                              by = "ID")
 ```
 
+```{r}
+full_draft_data <- full_draft_data_w_NAs %>%
+  filter(!is.na(Nat.))
+full_draft_data[is.na(full_draft_data)] <- 0
+```
 
+```{r}
+write_csv(teamlevel_data, "/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Good Data//team_level.csv")
+```
+
+```{r}
+library(rvest)
+draftodds20172021_table <- read_html("https://en.wikipedia.org/wiki/NHL_Entry_Draft") %>%
+  
+  html_nodes(., "table") %>%
+  
+  html_table(., fill = T) %>%
+  
+  .[[3]]
+```
+
+```{r}
+draftodds20152017_table <- read_html("https://en.wikipedia.org/wiki/NHL_Entry_Draft") %>%
+  
+  html_nodes(., "table") %>%
+  
+  html_table(., fill = T) %>%
+  
+  .[[2]]
+```
+
+```{r}
+draftodds20002014_table <- read_html("https://en.wikipedia.org/wiki/NHL_Entry_Draft") %>%
+  
+  html_nodes(., "table") %>%
+  
+  html_table(., fill = T) %>%
+  
+  .[[1]]
+```
 
