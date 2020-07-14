@@ -1,0 +1,45 @@
+---
+title: "Untitled"
+author: "Jill Reiner"
+date: "7/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+```{r}
+draftdata <- read_csv("/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Data_CombineThese/NHLdraftdata20002019.csv")
+playerdata <- read_csv("/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Data_CombineThese/playerCareerData0506to1920.csv")
+```
+
+```{r}
+draftdata2 <- draftdata2 %>%
+  mutate(ID = gsub(".*\\\\", " ", Player))
+
+playerdata <- playerdata %>%
+  mutate(ID = gsub(".*\\\\", " ", Player))
+```
+
+```{r}
+draft_data_clean <- draftdata2 %>%
+  select(Year, Round, Overall, Team, Player, Nat., Pos, Age, To, 
+         YrsPlayed, AmateurTeam, AmateurLeague, ID) %>%
+  rename(draft_year = Year)
+
+player_career_data_clean <- playerdata %>%
+  select(-Player)
+```
+
+```{r}
+full_draft_data_w_NAs <- left_join(draft_data_clean,
+                                   player_career_data_clean,
+                             by = "ID")
+```
+
+
+
