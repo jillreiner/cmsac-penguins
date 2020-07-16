@@ -1,0 +1,121 @@
+---
+title: "Scraping"
+author: "Jill Reiner"
+date: "7/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(readr)
+library(plyr)
+library(ggplot2)
+library(stringr)
+library(mosaic)
+library(readxl)
+```
+
+```{r}
+filtered_teamdata <- teamlevel_data %>%
+  filter(situation == "all") %>%
+  select("team", "season", "xGoalsPercentage", "corsiPercentage", "fenwickPercentage", "xGoalsFor", "shotsOnGoalFor", "shotAttemptsFor", "goalsFor", "penaltiesFor", "faceOffsWonFor", "penaltiesFor", "hitsFor", "takeawaysFor", "giveawaysFor", "xGoalsAgainst", "shotsOnGoalAgainst", "shotAttemptsAgainst", "goalsAgainst", "penaltiesAgainst", "faceOffsWonAgainst", "hitsAgainst", "takeawaysAgainst", "giveawaysAgainst")
+  
+filtered_teamdata$season[filtered_teamdata$season == "2008"] <- "2008-09"
+filtered_teamdata$season[filtered_teamdata$season == "2009"] <- "2009-10"
+filtered_teamdata$season[filtered_teamdata$season == "2010"] <- "2010-11"
+filtered_teamdata$season[filtered_teamdata$season == "2011"] <- "2011-12"
+filtered_teamdata$season[filtered_teamdata$season == "2012"] <- "2012-13"
+filtered_teamdata$season[filtered_teamdata$season == "2013"] <- "2013-14"
+filtered_teamdata$season[filtered_teamdata$season == "2014"] <- "2014-15"
+filtered_teamdata$season[filtered_teamdata$season == "2015"] <- "2015-16"
+filtered_teamdata$season[filtered_teamdata$season == "2016"] <- "2016-17"
+filtered_teamdata$season[filtered_teamdata$season == "2017"] <- "2017-18"
+filtered_teamdata$season[filtered_teamdata$season == "2018"] <- "2018-19"
+filtered_teamdata$season[filtered_teamdata$season == "2019"] <- "2019-20"
+
+filtered_teamdata$team[filtered_teamdata$team == "T.B"] <- "TBL"
+filtered_teamdata$team[filtered_teamdata$team == "L.A"] <- "LAK"
+filtered_teamdata$team[filtered_teamdata$team == "N.J"] <- "NJD"
+filtered_teamdata$team[filtered_teamdata$team == "S.J"] <- "SJS"
+```
+
+```{r}
+setwd("~/Desktop/CMSAC Projects/cmsac-penguins/")
+mydir = "NHLteamdata"
+myfiles = list.files(path=mydir, pattern="*.xlsx", full.names=TRUE)
+
+NHLteam_data = ldply(myfiles, read_excel)
+NHLteam_data
+```
+
+```{r}
+NHLteam_data$Team[NHLteam_data$Team == "Vancouver Canucks"] <- "VAN"
+NHLteam_data$Team[NHLteam_data$Team == "Montréal Canadiens"] <- "MTL"
+NHLteam_data$Team[NHLteam_data$Team == "Washington Capitals"] <- "WSH"
+NHLteam_data$Team[NHLteam_data$Team == "Buffalo Sabres"] <- "BUF"
+NHLteam_data$Team[NHLteam_data$Team == "Florida Panthers"] <- "FLA"
+NHLteam_data$Team[NHLteam_data$Team == "Dallas Stars"] <- "DAL"
+NHLteam_data$Team[NHLteam_data$Team == "San Jose Sharks"] <- "SJS"
+NHLteam_data$Team[NHLteam_data$Team == "Columbus Blue Jackets"] <- "CBJ"
+NHLteam_data$Team[NHLteam_data$Team == "Los Angeles Kings"] <- "LAK"
+NHLteam_data$Team[NHLteam_data$Team == "Phoenix Coyotes"] <- "ARI"
+NHLteam_data$Team[NHLteam_data$Team == "Toronto Maple Leafs"] <- "TOR"
+NHLteam_data$Team[NHLteam_data$Team == "Anaheim Ducks"] <- "ANA"
+NHLteam_data$Team[NHLteam_data$Team == "Pittsburgh Penguins"] <- "PIT"
+NHLteam_data$Team[NHLteam_data$Team == "Boston Bruins"] <- "BOS"
+NHLteam_data$Team[NHLteam_data$Team == "Nashville Predators"] <- "NSH"
+NHLteam_data$Team[NHLteam_data$Team == "New Jersey Devils"] <- "NJD"
+NHLteam_data$Team[NHLteam_data$Team == "New York Islanders"] <- "NYI"
+NHLteam_data$Team[NHLteam_data$Team == "Minnesota Wild"] <- "MIN"
+NHLteam_data$Team[NHLteam_data$Team == "Calgary Flames"] <- "CGY"
+NHLteam_data$Team[NHLteam_data$Team == "Detroit Red Wings"] <- "DET"
+NHLteam_data$Team[NHLteam_data$Team == "Colorado Avalanche"] <- "COL"
+NHLteam_data$Team[NHLteam_data$Team == "St. Louis Blues"] <- "STL"
+NHLteam_data$Team[NHLteam_data$Team == "New York Rangers"] <- "NYR"
+NHLteam_data$Team[NHLteam_data$Team == "Tampa Bay Lightning"] <- "TBL"
+NHLteam_data$Team[NHLteam_data$Team == "Chicago Blackhawks"] <- "CHI"
+NHLteam_data$Team[NHLteam_data$Team == "Ottawa Senators"] <- "OTT"
+NHLteam_data$Team[NHLteam_data$Team == "Edmonton Oilers"] <- "EDM"
+NHLteam_data$Team[NHLteam_data$Team == "Atlanta Thrashers"] <- "ATL"
+NHLteam_data$Team[NHLteam_data$Team == "Carolina Hurricanes"] <- "CAR"
+NHLteam_data$Team[NHLteam_data$Team == "Philadelphia Flyers"] <- "PHI"
+NHLteam_data$Team[NHLteam_data$Team == "Vegas Golden Knights"] <- "VGK"
+NHLteam_data$Team[NHLteam_data$Team == "Winnipeg Jets"] <- "WPG"
+NHLteam_data$Team[NHLteam_data$Team == "Arizona Coyotes"] <- "ARI"
+```
+
+```{r}
+NHLteam_data$Season[NHLteam_data$Season == "20082009"] <- "2008-09"
+NHLteam_data$Season[NHLteam_data$Season == "20092010"] <- "2009-10"
+NHLteam_data$Season[NHLteam_data$Season == "20102011"] <- "2010-11"
+NHLteam_data$Season[NHLteam_data$Season == "20112012"] <- "2011-12"
+NHLteam_data$Season[NHLteam_data$Season == "20122013"] <- "2012-13"
+NHLteam_data$Season[NHLteam_data$Season == "20132014"] <- "2013-14"
+NHLteam_data$Season[NHLteam_data$Season == "20142015"] <- "2014-15"
+NHLteam_data$Season[NHLteam_data$Season == "20152016"] <- "2015-16"
+NHLteam_data$Season[NHLteam_data$Season == "20162017"] <- "2016-17"
+NHLteam_data$Season[NHLteam_data$Season == "20172018"] <- "2017-18"
+NHLteam_data$Season[NHLteam_data$Season == "20192020"] <- "2019-20"
+```
+
+```{r}
+filtered_NHLdata <- NHLteam_data %>%
+  select(-"T", -"GF", -"GA", -"FOW%")
+
+colnames(filtered_NHLdata)[1]  <- "team"
+colnames(filtered_NHLdata)[2]  <- "season"
+
+combined_teamdata <- left_join(filtered_NHLdata, filtered_teamdata,
+                               by = c("team", "season"))
+```
+
+```{r}
+combined_teamdata <- combined_teamdata %>%
+  mutate(goalDifferential = goalsFor - goalsAgainst)
+```
+
+```{r}
+write_csv(combined_teamdata, "/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Good Data//teamleveldata.csv")
+```
+
