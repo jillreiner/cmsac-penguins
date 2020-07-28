@@ -1,0 +1,503 @@
+---
+title: "predicting_next_season"
+output: html_document
+---
+
+now we want to use our random forest to create a distribution of possible season outcomes
+
+I need to basically re-create the random forest model from before, so I need to first manipulate the data like it was in the modeling script
+
+```{r}
+library(tidyverse)
+library(caret)
+library(mgcv)
+library(ranger)
+library(dplyr)
+
+complex_team_season_data <-
+  read_csv("../Good Data/predictingPpercNextSeason.csv")
+complex_team_season_data <- complex_team_season_data %>%
+  mutate(xGperc = xGoalsFor / (xGoalsFor + xGoalsAgainst))
+```
+
+Now I want to work on modeling next season's win percentage based on this season's stats...
+I think I need to do some data manipulation to turn these into per-game stats and remove some of the named data
+```{r}
+next_year_model_data <- complex_team_season_data %>%
+  select(-team, -season, -season_end, -tm_season) %>%
+  mutate(xGFor_per_game = xGoalsFor / GP, 
+         shotsFor_per_game = shotsOnGoalFor / GP,
+         shotAttemptsFor_per_game = shotAttemptsFor / GP,
+         goalsFor_per_game = goalsFor / GP,
+         penaltiesFor_per_game = penaltiesFor / GP,
+         faceoffsWonFor_per_game = faceOffsWonFor / GP,
+         hitsFor_per_game = hitsFor / GP,
+         takeawaysFor_per_game = takeawaysFor / GP,
+         giveawaysFor_per_game = giveawaysFor / GP,
+         xGAgainst_per_game = xGoalsAgainst / GP,
+         shotsAgainst_per_game = shotsOnGoalAgainst / GP,
+         shotAttemptsAgainst_per_game = shotAttemptsAgainst / GP,
+         goalsAgainst_per_game = goalsAgainst / GP,
+         penaltiesAgainst_per_game = penaltiesAgainst / GP,
+         faceoffsWonAgainst_per_game = faceOffsWonAgainst / GP,
+         hitsAgainst_per_game = hitsAgainst / GP,
+         takeawaysAgainst_per_game = takeawaysAgainst / GP,
+         giveawaysAgainst_per_game = giveawaysAgainst / GP) %>%
+  select(-GP, -W, -L, -OT, -P, -RW, -ROW, -`S/O Win`, -xGoalsPercentage,
+         -xGoalsFor, -shotsOnGoalFor, -shotAttemptsFor, -goalsFor, 
+         -penaltiesFor, -faceOffsWonFor, -hitsFor, -takeawaysFor, 
+         -giveawaysFor, -xGoalsAgainst, -shotsOnGoalAgainst, 
+         -shotAttemptsAgainst, -goalsAgainst, -penaltiesAgainst, 
+         -faceOffsWonAgainst, -hitsAgainst, -takeawaysAgainst, 
+         -giveawaysAgainst, -shotsFor_per_game, -goalsFor_per_game,
+         -shotsAgainst_per_game, -goalsAgainst_per_game,
+         -penaltiesFor_per_game, -penaltiesAgainst_per_game) %>%
+  rename(PTSperc = `P%`, goalsFor_per_game = `GF/GP`,
+         goalsAgainst_per_game = `GA/GP`, PP_perc = `PP%`,
+         PK_perc = `PK%`, netPP_perc = `Net PP%`, netPK_perc = `Net PK%`,
+         shotsFor_per_game = `Shots/GP`, shotsAgainst_per_game = `SA/GP`) %>%
+  filter(!is.na(next_year_pts_perc))
+  
+#adding thru%for and against
+next_year_model_data <- next_year_model_data %>%
+  mutate(shot_thru_perc_for = shotsFor_per_game / shotAttemptsFor_per_game,
+         shot_thru_perc_against = 
+           shotsAgainst_per_game / shotAttemptsAgainst_per_game)
+```
+
+
+
+I want to run a number of models, tuning each as needed
+
+first I need to create the folds for 10-fold cross validation
+```{r}
+set.seed(2020)
+
+train_i <- createDataPartition(y = next_year_model_data$next_year_pts_perc,
+                               p = 0.9, list = FALSE) %>%
+  as.numeric()
+
+train_nextyear_data <- next_year_model_data[train_i,]
+test_nextyear_data <- next_year_model_data[-train_i,]
+
+```
+
+then build the model...
+Random Forest
+```{r}
+rf_tune_grid <-
+  expand.grid(mtry = seq(3, 18, by = 3),
+              splitrule = "variance",
+              min.node.size = 5)
+
+set.seed(2010)
+init_rf_nextyear_train <-
+  train(next_year_pts_perc ~ ., data = train_nextyear_data,
+        method = "ranger", num.trees = 500, 
+        trControl = trainControl(method = "cv", number = 5),
+        tuneGrid = rf_tune_grid)
+plot(init_rf_nextyear_train)
+```
+
+```{r}
+init_rf_nextyear_train$bestTune
+```
+
+```{r}
+init_rf_nextyear_train$results[3,]
+```
+
+
+so now I want to build a model using the ranger package and these tuned parameters
+```{r}
+final_rf_next_year <- ranger(next_year_pts_perc ~ .,
+                             data = next_year_model_data,
+                             splitrule = "variance",
+                             min.node.size = 5,
+                             mtry = 3,
+                             num.trees = 500)
+```
+
+so I have the model, and now I need to get predictions from this model for the 2020-21 season
+
+first I want a dataset that is just the current season...
+```{r}
+just_this_season <- complex_team_season_data
+
+just_this_season <- just_this_season %>%
+  mutate(xGFor_per_game = xGoalsFor / GP, 
+         shotsFor_per_game = shotsOnGoalFor / GP,
+         shotAttemptsFor_per_game = shotAttemptsFor / GP,
+         goalsFor_per_game = goalsFor / GP,
+         penaltiesFor_per_game = penaltiesFor / GP,
+         faceoffsWonFor_per_game = faceOffsWonFor / GP,
+         hitsFor_per_game = hitsFor / GP,
+         takeawaysFor_per_game = takeawaysFor / GP,
+         giveawaysFor_per_game = giveawaysFor / GP,
+         xGAgainst_per_game = xGoalsAgainst / GP,
+         shotsAgainst_per_game = shotsOnGoalAgainst / GP,
+         shotAttemptsAgainst_per_game = shotAttemptsAgainst / GP,
+         goalsAgainst_per_game = goalsAgainst / GP,
+         penaltiesAgainst_per_game = penaltiesAgainst / GP,
+         faceoffsWonAgainst_per_game = faceOffsWonAgainst / GP,
+         hitsAgainst_per_game = hitsAgainst / GP,
+         takeawaysAgainst_per_game = takeawaysAgainst / GP,
+         giveawaysAgainst_per_game = giveawaysAgainst / GP) %>%
+  select(-GP, -W, -L, -OT, -P, -RW, -ROW, -`S/O Win`, -xGoalsPercentage,
+         -xGoalsFor, -shotsOnGoalFor, -shotAttemptsFor, -goalsFor, 
+         -penaltiesFor, -faceOffsWonFor, -hitsFor, -takeawaysFor, 
+         -giveawaysFor, -xGoalsAgainst, -shotsOnGoalAgainst, 
+         -shotAttemptsAgainst, -goalsAgainst, -penaltiesAgainst, 
+         -faceOffsWonAgainst, -hitsAgainst, -takeawaysAgainst, 
+         -giveawaysAgainst, -shotsFor_per_game, -goalsFor_per_game,
+         -shotsAgainst_per_game, -goalsAgainst_per_game,
+         -penaltiesFor_per_game, -penaltiesAgainst_per_game) %>%
+  rename(PTSperc = `P%`, goalsFor_per_game = `GF/GP`,
+         goalsAgainst_per_game = `GA/GP`, PP_perc = `PP%`,
+         PK_perc = `PK%`, netPP_perc = `Net PP%`, netPK_perc = `Net PK%`,
+         shotsFor_per_game = `Shots/GP`, shotsAgainst_per_game = `SA/GP`)
+```
+
+```{r}
+#adding thru%for and against
+just_this_season <- just_this_season %>%
+  mutate(shot_thru_perc_for = shotsFor_per_game / shotAttemptsFor_per_game,
+         shot_thru_perc_against = 
+           shotsAgainst_per_game / shotAttemptsAgainst_per_game)
+
+just_this_season <- just_this_season %>%
+  filter(is.na(next_year_pts_perc))
+  
+```
+
+now to get predictions...
+
+```{r}
+tree_predictions <- predict(final_rf_next_year, data = just_this_season,
+                             predict.all = TRUE)
+```
+
+now I want to randomly sample a prediction from the trees in the forest for each team
+```{r}
+one_prediction <- just_this_season %>%
+  select(team)
+
+pred_locs <- sample(1:500, 31, replace = FALSE)
+these_preds <- rep(0, 31)
+
+for(team_i in 1:31) {
+  
+  this_pred <- tree_predictions$predictions[team_i, pred_locs[team_i]]
+  these_preds[team_i] <- this_pred
+}
+
+one_prediction <- one_prediction %>%
+  bind_cols(predicted_pts_perc = these_preds)
+
+one_prediction <- one_prediction %>%
+  mutate(rank = dense_rank(desc(predicted_pts_perc)))
+
+pit_rank <- one_prediction %>%
+  filter(team == "PIT") %>%
+  select(rank)
+
+```
+so that does it once... I want to do it a bunch of times...
+
+```{r}
+simulated_pit_ranks <- rep(0, 10000)
+
+set.seed(2020)
+for(iter_j in 1:10000) {
+  one_prediction <- just_this_season %>%
+    select(team)
+
+  pred_locs <- sample(1:500, 31, replace = FALSE)
+  these_preds <- rep(0, 31)
+
+  for(team_i in 1:31) {
+  
+    this_pred <- tree_predictions$predictions[team_i, pred_locs[team_i]]
+    these_preds[team_i] <- this_pred
+  }
+
+  one_prediction <- one_prediction %>%
+    bind_cols(predicted_pts_perc = these_preds)
+
+  one_prediction <- one_prediction %>%
+    mutate(rank = rank(desc(predicted_pts_perc), ties.method = "random"))
+
+  pit_rank <- one_prediction %>%
+    filter(team == "PIT") %>%
+    select(rank)
+  
+  simulated_pit_ranks[iter_j] <- as.numeric(pit_rank)
+
+}
+
+simulated_pit_ranks <- as_tibble(simulated_pit_ranks) %>%
+  rename(rank = value)
+
+```
+ so now I have 10000 simulations of the season, determining what rank the Penguins finished in for each one...
+ 
+I kind of want to see what that distribution looks like
+```{r}
+summary(simulated_pit_ranks)
+```
+
+```{r}
+simulated_pit_ranks %>%
+  ggplot(aes(x = rank)) +
+  geom_histogram(bins = 31) +
+  geom_vline(xintercept = 11.58, linetype = "dashed", color = "gold") +
+  annotate("text", x = 15, y = 650, size = 3, label = "Mean = 11.58") +
+  geom_vline(xintercept = 6, linetype = "dashed", color = "gold") +
+  annotate("text", x = 3.3, y = 650, size = 3, label = "Mode = 6") +
+  labs(y = "Count",
+       x = "Rank",
+       title = "Simulated End-of-Season Ranks for the 2020-21 Pittsburgh Penguins",
+       caption = "10,000 simulations using random forest trees") +
+  theme_bw()
+ggsave("pitranks.png")
+```
+now to calculate the probability that the Penguins finish in each spot in the standings...
+
+```{r}
+possible_ranks <- c(1:31)
+probs <- rep(0, 31)
+
+for(rank_i in 1:31) {
+  probs[rank_i] <- sum(simulated_pit_ranks$rank == rank_i) / 10000
+}
+
+end_rank_probabilities <- bind_cols(possible_ranks = possible_ranks,
+                                    probability = probs)
+
+```
+
+so that creates a dataframe showing the probability of each rank being achieved
+
+we also want to combine these probabilities with the draft lottery probabilities, so to do this we are going to simulate the draft a bunch of times
+
+```{r}
+
+many_predictions <- just_this_season %>%
+  select(team)
+
+set.seed(2020)
+for(iter_j in 1:10000) {
+  one_prediction <- just_this_season %>%
+    select(team)
+
+  pred_locs <- sample(1:500, 31, replace = FALSE)
+  these_preds <- rep(0, 31)
+
+  for(team_i in 1:31) {
+  
+    this_pred <- tree_predictions$predictions[team_i, pred_locs[team_i]]
+    these_preds[team_i] <- this_pred
+  }
+
+  one_prediction <- one_prediction %>%
+    bind_cols(predicted_pts_perc = these_preds)
+
+  one_prediction <- one_prediction %>%
+    mutate(rank = rank(desc(predicted_pts_perc), ties.method = "random"))
+  
+  many_predictions <- many_predictions %>%
+    bind_cols(predicted_rank = one_prediction$rank)
+    
+
+}
+```
+so that leaves me with a dataset of the 10000 season outcomes, with each team's rankings... now I need to simulate the draft for each of these 10000 season outcomes
+
+```{r}
+draft_pick_order_simulations <- just_this_season %>%
+  select(team)
+
+pick_order <- rep(0, 31)
+
+simulated_pit_picks <- rep(0, 10000)
+
+set.seed(2021)
+for(iter_j in 1:10000) {
+  one_simulation <- just_this_season %>%
+    select(team)
+
+  this_season_outcome <- many_predictions %>%
+    select(iter_j+1)
+  
+  colnames(this_season_outcome)[1] <- "tmrank"
+    
+  this_season_outcome <- this_season_outcome %>%
+    bind_cols(team = many_predictions$team)
+  
+  best_16 <- this_season_outcome %>%
+    filter(tmrank < 17) %>%
+    mutate(pick_order = 32 - tmrank)
+  
+  this_draft_order <- best_16
+  
+  worst_15 <- this_season_outcome %>%
+    filter(tmrank >= 17) %>%
+    mutate(init_pick_order = 32 - tmrank, pick_order = 0)
+  
+  #find the number 1 spot:
+  who_gets_1 <- sample(1:15, size = 1, replace = FALSE, 
+                       prob = c(18.5, 13.5, 11.5, 9.5, 8.5, 7.5, 6.5, 6.0,
+                                5.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0))
+  
+  probabilities <- as.vector(c(18.5, 13.5, 11.5, 9.5, 8.5, 7.5, 6.5, 6.0,
+                                5.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0))
+  
+  for (pick_i in 1:3) {
+    who_gets_this_pick <- sample(1:(16-pick_i), size = 1, replace = FALSE, 
+                       prob = probabilities)
+    
+    team_getting_pick <- worst_15 %>%
+      filter(init_pick_order == who_gets_this_pick)
+    team_getting_pick$pick_order <- pick_i
+    
+    this_draft_order <- this_draft_order %>%
+      bind_rows(team_getting_pick)
+    
+    worst_15 <- worst_15 %>%
+      filter(init_pick_order != who_gets_this_pick)
+    
+    probabilities <- probabilities[-who_gets_this_pick]
+  }
+  
+  worst_15$pick_order <- rank(worst_15$init_pick_order) + 3
+  
+  this_draft_order <- this_draft_order %>%
+    bind_rows(worst_15)
+  
+  simulated_pit_picks[iter_j] <- this_draft_order %>%
+    filter(team == "PIT") %>%
+    select(pick_order)
+  
+  draft_pick_order_simulations <- draft_pick_order_simulations %>%
+    bind_cols(predicted_pick_order = this_draft_order$pick_order)
+
+}
+```
+
+```{r}
+simulated_pit_picks <- as.data.frame(simulated_pit_picks)
+
+simulated_pit_picks <- pivot_longer(simulated_pit_picks, everything(), values_to = "value")
+```
+
+```{r}
+simulated_pit_picks <- simulated_pit_picks %>%
+  select(-name) %>%
+  rename(pick = value)
+```
+
+
+so now I have 10,000 simulated drafts based on 10,000 simulated seasons
+what is the probability of the Penguins ending up in a given draft pick spot?
+
+```{r}
+summary(simulated_pit_picks)
+```
+
+```{r}
+as_tibble(simulated_pit_picks) %>%
+  ggplot(aes(x = pick)) +
+  geom_histogram(bins = 31) +
+  geom_vline(xintercept = 20.44, linetype = "dashed", color = "gold") +
+  annotate("text", x = 18, y = 650, size = 3, label = "Mean = 20.44") +
+  geom_vline(xintercept = 26, linetype = "dashed", color = "gold") +
+  annotate("text", x = 28.5, y = 650, size = 3, label = "Mode = 26") +
+  labs(title = "Simulated Draft Pick Spots for the 2020-21 Pittsburgh Penguins",
+       x = "Pick",
+       y = "Count",
+       caption = "10,000 simulations of the NHL Draft Lottery based on simulated end-of-season ranks") +
+  theme_bw()
+ggsave("pensdraft.png")
+```
+now to calculate the probability that the Penguins get each pick...
+
+```{r}
+possible_picks <- c(1:31)
+probs_picks <- rep(0, 31)
+
+for(pick_spot_i in 1:31) {
+  probs_picks[pick_spot_i] <- sum(simulated_pit_picks$pick == pick_spot_i)  #/ 10000
+}
+
+pick_order_probabilities <- bind_cols(Overall = possible_picks,
+                                    probability = probs_picks)
+
+```
+
+so that creates a dataframe showing the probability of each rank being achieved
+
+```{r}
+predictions <- read_csv("/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Good Data/Predictions_lm.csv")
+```
+
+```{r}
+combined_draft <- left_join(predictions, pick_order_probabilities, by = "Overall")
+```
+
+```{r}
+predictions %>%
+  ggplot(aes(x = lm_preds)) +
+  geom_histogram()
+```
+
+```{r}
+tags <- c("Lottery Pick: 1 to 3","Early 1st Round: 4 to 10", "Mid 1st Round: 11 to 20", "Late 1st Round: 21 to 31")
+
+combined_draft2 <- combined_draft %>%
+  mutate(tag = case_when(
+    Overall %in% (1:3) ~ tags[1],
+    Overall %in% (4:10) ~ tags[2],
+    Overall %in% (11:20) ~ tags[3],
+    Overall %in% (21:31) ~ tags[4])) %>%
+  group_by(tag) %>%
+  summarize(prob = sum(probability))
+  
+```
+
+```{r}
+combined_draft2 %>%
+  ggplot(aes(x = reorder(tag, prob), y = prob)) +
+  geom_bar(stat = "identity", fill = "gold") +
+  coord_flip() +
+  labs(title = "2020-21 Draft Pick Probabilities",
+       x = "Pick Category",
+       y = "Probability") +
+  theme_bw() +
+ggsave("pick_prob_good.png", width = 9, height = 5)
+```
+
+```{r}
+simulated_pit_ranks %>%
+  ggplot(aes(rank)) +
+  geom_density() +
+  theme_bw() +
+  geom_vline(xintercept = 6, linetype = "dashed", color = "gold") +
+  labs(title = "Where will the Penguins most likely finish in the 2020-21 season?",
+       y = "Density",
+       x = "Rank")
+ggsave("rank_density.png")
+```
+
+```{r}
+simulated_pit_picks %>%
+  ggplot(aes(pick)) +
+  geom_density() +
+  theme_bw() +
+  geom_vline(xintercept = 26, linetype = "dashed", color = "gold") +
+  labs(title = "Where will the Penguins most likely draft in the 2020-21 season?",
+       y = "Density",
+       x = "Pick")
+ggsave("pick_density.png")
+```
+
+

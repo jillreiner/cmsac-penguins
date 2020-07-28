@@ -1,0 +1,84 @@
+---
+title: "TeamPredictions_Script"
+author: "Jill Reiner"
+date: "7/23/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+```{r}
+rates_fulldata <-
+  read_csv("../Good Data/rates_fulldata.csv")
+```
+
+```{r}
+rates_fulldata %>%
+  ggplot(aes(x = log(avgPSperseason))) +
+  geom_histogram()
+```
+
+
+
+```{r}
+lm1 <- lm(avgPSperseason ~ Overall + Overall^2 + (1 / Overall) + log(Overall), data = rates_fulldata)
+
+rates_fulldata$lm_preds <- predict(lm1, rates_fulldata)
+summary(lm1)
+```
+
+```{r}
+rates_fulldata$lm_preds[rates_fulldata$Overall == 1] <- 7.0095431
+#replacing 1st and 2nd overall picks with historical mean across their respective picks instead of lm predictions
+rates_fulldata$lm_preds[rates_fulldata$Overall == 2] <- 5.5005517
+```
+
+```{r}
+predictions %>%
+  ggplot(aes(x = Overall,
+             y = lm_preds)) +
+  geom_point() +
+  geom_text(aes(label = round(lm_preds, 1)), 
+            vjust = "inward", hjust = "inward",
+            nudge_y = .25,
+            check_overlap = TRUE) +
+  geom_line(color = "gold", size = 1) +
+  scale_x_continuous(limits = c(1,31)) +
+  labs(title = "NHL Draft Pick Slot Value",
+       subtitle = "2005-2017 NHL Entry Drafts",
+       x = "Overall",
+       y = "Average Point Shares / Season") +
+  theme_bw()
+#ggsave("pick_value.png")
+```
+
+```{r}
+write_csv(rates_fulldata, "/Users/jillreiner/Desktop/CMSAC Projects/cmsac-penguins/Good Data//rates_fulldata.csv")
+```
+
+```{r}
+library(gt)
+predictions2 <- predictions %>%
+  select(Overall, lm_preds) %>%
+  gt() %>%
+  tab_header(
+    title = "NHL Draft Pick Slot Value",
+    subtitle = "Measured in Average Point Shares per Season")
+
+predictions2 %>%
+  tab_header(
+  title = "NHL Draft Pick Slot Value",
+  subtitle = "Measured in Average Point Shares per Season") %>%
+
+  fmt_number(
+    columns = vars(lm_preds),
+    decimals = 2
+  ) %>%
+  cols_label(lm_preds = "Draft Slot Value")
+
+  gtsave(predictions2, "value.png")
+```
+
