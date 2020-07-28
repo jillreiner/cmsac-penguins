@@ -1,2 +1,2 @@
 # cmsac-penguins
-CMSAC Final Project: Penguins Draft
+CMSAC Final Project: Penguins Draft Decision
